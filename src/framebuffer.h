@@ -30,19 +30,19 @@ public:
 	/*! List holding information about the different pixel formats in \sa PixelFormat. */
 	static const PixelFormatInfo pixelFormatInfo[];
 
-    /*!
-    Construct framebuffer interface and switch to new mode.
-    \param[in] width Width of new framebuffer mode. If 0 uses current width.
-    \param[in] height Height of new framebuffer mode. If 0 uses current height.
-    \param[in] bitsPerPixel Bit depth of new framebuffer mode. If 0 uses current bit depth.
-    \param[in] device Optional. Name of device to open.
-    */
+	/*!
+	Construct framebuffer interface and switch to new mode.
+	\param[in] width Width of new framebuffer mode. If 0 uses current width.
+	\param[in] height Height of new framebuffer mode. If 0 uses current height.
+	\param[in] bitsPerPixel Bit depth of new framebuffer mode. If 0 uses current bit depth.
+	\param[in] device Optional. Name of device to open.
+	*/
 	Framebuffer(uint32_t width, uint32_t height, uint32_t bitsPerPixel, const std::string & device = "/dev/fb0");
 
-    /*!
-    Construct framebuffer interface and open it with the current dimensions and bit depth.
-    \param[in] device Optional. Name of device to open.
-    */
+	/*!
+	Construct framebuffer interface and open it with the current dimensions and bit depth.
+	\param[in] device Optional. Name of device to open.
+	*/
 	Framebuffer(const std::string & device = "/dev/fb0");
 	
 	/*!
@@ -52,28 +52,28 @@ public:
 	*/
 	static PixelFormat screenInfoToPixelFormat(const struct fb_var_screeninfo & screenInfo);
 	
-    /*!
-    Check if framebuffer interface is available.
-    \return Returns true if the framebuffer interface can be used.
-    */
+	/*!
+	Check if framebuffer interface is available.
+	\return Returns true if the framebuffer interface can be used.
+	*/
 	bool isAvailable() const;
 	
-    uint32_t getWidth() const;
-    uint32_t getHeight() const;
-    PixelFormat getFormat() const;
-    PixelFormatInfo getFormatInfo() const;
+	uint32_t getWidth() const;
+	uint32_t getHeight() const;
+	PixelFormat getFormat() const;
+	PixelFormatInfo getFormatInfo() const;
 
-    /*!
-    Draw raw image to framebuffer at position.
-    \param[in] x Horizontal position where to draw image in framebuffer.
-    \param[in] y Vertical position where to draw image in framebuffer.
-    \param[in] data Pointer to raw source image data.
-    \param[in] width Width of source image in pixels.
-    \param[in] height Height of source image in pixels.
-    \param[in] sourceFormat Source \sa data pixel format.
-    \note Should work for 32/24/16/15 bit pixel formats.
-    */
-    void blit(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+	/*!
+	Draw raw image to framebuffer at position.
+	\param[in] x Horizontal position where to draw image in framebuffer.
+	\param[in] y Vertical position where to draw image in framebuffer.
+	\param[in] data Pointer to raw source image data.
+	\param[in] width Width of source image in pixels.
+	\param[in] height Height of source image in pixels.
+	\param[in] sourceFormat Source \sa data pixel format.
+	\note Should work for 32/24/16/15 bit pixel formats.
+	*/
+	void blit(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
 	
 	~Framebuffer();
 	
@@ -85,13 +85,13 @@ private:
 	void blit_X1R5G5B5(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
 	void blit_R5G6B5(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
 
-    /*!
-    Construct framebuffer interface and switch to new mode.
-    \param[in] width Width of new framebuffer mode. If 0 uses current width.
-    \param[in] height Height of new framebuffer mode. If 0 uses current height.
-    \param[in] bitsPerPixel Bit depth of new framebuffer mode. If 0 uses current bit depth.
-    \param[in] device Name of device to open.
-    */	
+	/*!
+	Construct framebuffer interface and switch to new mode.
+	\param[in] width Width of new framebuffer mode. If 0 uses current width.
+	\param[in] height Height of new framebuffer mode. If 0 uses current height.
+	\param[in] bitsPerPixel Bit depth of new framebuffer mode. If 0 uses current bit depth.
+	\param[in] device Name of device to open.
+	*/	
 	void create(uint32_t width, uint32_t height, uint32_t bitsPerPixel, const std::string & device);
 	
 	void destroy();
@@ -99,8 +99,8 @@ private:
 	int m_frameBufferDevice; //!<Framebuffer device handle.
 	uint8_t * m_frameBuffer; //!<Pointer to memory-mapped raw framebuffer pixel data.
 	uint32_t m_frameBufferSize; //!<Size of whole framebuffer in Bytes.
-    PixelFormat m_format; //!<The pixel format the framebuffer has.
-    PixelFormatInfo m_formatInfo; //!<Information about the pixel format the framebuffer has.
+	PixelFormat m_format; //!<The pixel format the framebuffer has.
+	PixelFormatInfo m_formatInfo; //!<Information about the pixel format the framebuffer has.
 
 	struct fb_var_screeninfo m_oldMode; //!<Original framebuffer mode before mode switch.
 	struct fb_var_screeninfo m_currentMode; //!<New framebuffer mode while application is running.
