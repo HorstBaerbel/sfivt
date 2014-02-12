@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <inttypes.h>
 #include <linux/fb.h>
 
@@ -7,7 +8,27 @@
 class Framebuffer
 {
 public:
-	enum PixelFormat { BAD_PIXELFORMAT, R8G8B8X8, X8R8G8B8, R8G8B8, X1R5G5B5, R5G6B5, I8 }; //!<The truecolor pixel formats we support.
+	enum PixelFormat { BAD_PIXELFORMAT, R8G8B8X8, X8R8G8B8, R8G8B8, X1R5G5B5, R5G6B5, GREY8 }; //!<The truecolor pixel formats we support.
+	
+	/*! Structure holding some info about a pixel format. */
+	struct PixelFormatInfo
+	{
+		PixelFormat format;
+		uint32_t bitsPerPixel;
+		uint32_t bytesPerPixel;
+		uint32_t bitsRed; //!<How many bits the red color component has.
+		uint32_t bitsGreen;
+		uint32_t bitsBlue;
+		uint32_t bitsAlpha;
+		uint32_t shiftRed; //!<At what bit position red can be found in the pixel data.
+		uint32_t shiftGreen;
+		uint32_t shiftBlue;
+		uint32_t shiftAlpha;
+		std::string name;
+	};
+	
+	/*! List holding information about the different pixel formats in \sa PixelFormat. */
+	static const PixelFormatInfo pixelFormatInfo[];
 
     /*!
     Construct framebuffer interface and switch to new mode.
@@ -39,34 +60,30 @@ public:
 	
     uint32_t getWidth() const;
     uint32_t getHeight() const;
-    uint32_t getBitsPerPixel() const;
-    uint32_t getBytesPerPixel() const;
-    PixelFormat getPixelFormat() const;
+    PixelFormat getFormat() const;
+    PixelFormatInfo getFormatInfo() const;
 
     /*!
     Draw raw image to framebuffer at position.
-    \param[in] x Horizontal position where to draw image.
-    \param[in] y Vertical position where to draw image.
-    \param[in] data Pointer to raw image data.
-    \param[in] width Width of image in pixels.
-    \param[in] height Height of image in pixels.
-    \param[in] sourceFormat \sa data pixel format.
+    \param[in] x Horizontal position where to draw image in framebuffer.
+    \param[in] y Vertical position where to draw image in framebuffer.
+    \param[in] data Pointer to raw source image data.
+    \param[in] width Width of source image in pixels.
+    \param[in] height Height of source image in pixels.
+    \param[in] sourceFormat Source \sa data pixel format.
     \note Should work for 32/24/16/15 bit pixel formats.
     */
-    void drawBuffer(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+    void blit(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
 	
 	~Framebuffer();
 	
 private:
-	int frameBufferDevice; //!<Framebuffer device handle.
-	uint8_t * frameBuffer; //!<Pointer to memory-mapped raw framebuffer pixel data.
-	uint32_t frameBufferSize; //!<Size of whole framebuffer in Bytes.
-    uint32_t bytesPerPixel; //!<Bytes per pixel on screen.
-    PixelFormat pixelFormat; //!<The pixel format the framebuffer has.
-
-	struct fb_var_screeninfo oldMode; //!<Original framebuffer mode before mode switch.
-	struct fb_var_screeninfo currentMode; //!<New framebuffer mode while application is running.
-	struct fb_fix_screeninfo fixedMode; //!<Fixed mode information for various needs.
+	void blit_copy(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height);
+	void blit_R8G8B8X8(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+	void blit_X8R8G8B8(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+	void blit_R8G8B8(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+	void blit_X1R5G5B5(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+	void blit_R5G6B5(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
 
     /*!
     Construct framebuffer interface and switch to new mode.
@@ -76,5 +93,16 @@ private:
     \param[in] device Name of device to open.
     */	
 	void create(uint32_t width, uint32_t height, uint32_t bitsPerPixel, const std::string & device);
+	
 	void destroy();
+
+	int m_frameBufferDevice; //!<Framebuffer device handle.
+	uint8_t * m_frameBuffer; //!<Pointer to memory-mapped raw framebuffer pixel data.
+	uint32_t m_frameBufferSize; //!<Size of whole framebuffer in Bytes.
+    PixelFormat m_format; //!<The pixel format the framebuffer has.
+    PixelFormatInfo m_formatInfo; //!<Information about the pixel format the framebuffer has.
+
+	struct fb_var_screeninfo m_oldMode; //!<Original framebuffer mode before mode switch.
+	struct fb_var_screeninfo m_currentMode; //!<New framebuffer mode while application is running.
+	struct fb_fix_screeninfo m_fixedMode; //!<Fixed mode information for various needs.
 };

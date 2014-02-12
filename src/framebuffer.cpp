@@ -7,115 +7,108 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 
-#include "consolestyle.h"
+
+const Framebuffer::PixelFormatInfo Framebuffer::pixelFormatInfo[] = {
+	{BAD_PIXELFORMAT, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "bad pixel format"},
+	{R8G8B8X8, 32, 4, 8, 8, 8, 8, 24, 16,  8,  0, "R8G8B8X8"},
+	{X8R8G8B8, 32, 4, 8, 8, 8, 8, 16,  8,  0, 24, "X8R8G8B8"},
+	{  R8G8B8, 24, 3, 8, 8, 8, 0, 24, 16,  8,  0, "R8G8B8"},
+	{X1R5G5B5, 16, 2, 5, 5, 5, 1, 10,  5,  0, 15, "X1R5G5B5"},
+	{  R5G6B5, 16, 2, 5, 6, 5, 0, 11,  5,  0,  0, "R5G6B5"},
+	{   GREY8,  8, 1, 8, 0, 0, 0,  0,  0,  0,  0, "GREY8"},
+};
 
 Framebuffer::Framebuffer(const std::string & device)
-	: frameBufferDevice(0), frameBuffer(nullptr), frameBufferSize(0), bytesPerPixel(0), pixelFormat(BAD_PIXELFORMAT)
+	: m_frameBufferDevice(0)
+	, m_frameBuffer(nullptr)
+	, m_frameBufferSize(0)
+	, m_format(BAD_PIXELFORMAT)
+	, m_formatInfo(pixelFormatInfo[0])
 {
 	create(0, 0, 0, device);
 }
 
 Framebuffer::Framebuffer(uint32_t width, uint32_t height, uint32_t bitsPerPixel, const std::string & device)
-	: frameBufferDevice(0), frameBuffer(nullptr), frameBufferSize(0), bytesPerPixel(0), pixelFormat(BAD_PIXELFORMAT)
+	: m_frameBufferDevice(0)
+	, m_frameBuffer(nullptr)
+	, m_frameBufferSize(0)
+	, m_format(BAD_PIXELFORMAT)
+	, m_formatInfo(pixelFormatInfo[0])
 {
 	create(width, height, bitsPerPixel, device);
 }
 
 void Framebuffer::create(uint32_t width, uint32_t height, uint32_t bitsPerPixel, const std::string & device)
 {
-    struct fb_var_screeninfo orig_vinfo;
-    long int screensize = 0;
-    
     std::cout << "Opening framebuffer " << device << "..." << std::endl;
 
     //open the framebuffer for reading/writing
-    frameBufferDevice = open(device.c_str(), O_RDWR);
-    if (frameBufferDevice <= 0) {
-        std::cout << ConsoleStyle(ConsoleStyle::RED) << "Failed to open " << device << " for reading/writing!" << ConsoleStyle() << std::endl;
-		frameBufferDevice = 0;
+    m_frameBufferDevice = open(device.c_str(), O_RDWR);
+    if (m_frameBufferDevice <= 0) {
+        std::cout << "Failed to open " << device << " for reading/writing!" << std::endl;
+		m_frameBufferDevice = 0;
         return;
     }
 
     //get current mode information
-    if (ioctl(frameBufferDevice, FBIOGET_VSCREENINFO, &currentMode)) {
-        std::cout << ConsoleStyle(ConsoleStyle::YELLOW) << "Failed to read variable mode information!" << ConsoleStyle() << std::endl;
+    if (ioctl(m_frameBufferDevice, FBIOGET_VSCREENINFO, &m_currentMode)) {
+        std::cout << "Failed to read variable mode information!" << std::endl;
     }
     else {
-        std::cout << "Original mode is " << currentMode.xres << "x" << currentMode.yres << "@" << currentMode.bits_per_pixel;
-        std::cout << " with virtual resolution " << currentMode.xres_virtual << "x" << currentMode.yres_virtual << "." << std::endl;
+        std::cout << "Original mode is " << m_currentMode.xres << "x" << m_currentMode.yres << "@" << m_currentMode.bits_per_pixel;
+        std::cout << " with virtual resolution " << m_currentMode.xres_virtual << "x" << m_currentMode.yres_virtual << "." << std::endl;
     }
     //store screen mode for restoring it
-    memcpy(&oldMode, &currentMode, sizeof(fb_var_screeninfo));
+    memcpy(&m_oldMode, &m_currentMode, sizeof(fb_var_screeninfo));
 
     //change screen mode. check if the user passed some values
     if (width != 0) {
-        currentMode.xres = width;
+        m_currentMode.xres = width;
     }
     if (height != 0) {
-        currentMode.yres = height;
+        m_currentMode.yres = height;
     }
     if (bitsPerPixel != 0) {
-        currentMode.bits_per_pixel = bitsPerPixel;
+        m_currentMode.bits_per_pixel = bitsPerPixel;
     }
-    currentMode.xres_virtual = currentMode.xres;
-    currentMode.yres_virtual = currentMode.yres;
-    if (ioctl(frameBufferDevice, FBIOPUT_VSCREENINFO, &currentMode)) {
-		std::cout << ConsoleStyle(ConsoleStyle::RED) << "Failed to set mode to " << currentMode.xres << "x" << currentMode.yres << "@" << currentMode.bits_per_pixel << "!" << ConsoleStyle() << std::endl;
+    m_currentMode.xres_virtual = m_currentMode.xres;
+    m_currentMode.yres_virtual = m_currentMode.yres;
+    if (ioctl(m_frameBufferDevice, FBIOPUT_VSCREENINFO, &m_currentMode)) {
+		std::cout << "Failed to set mode to " << m_currentMode.xres << "x" << m_currentMode.yres << "@" << m_currentMode.bits_per_pixel << "!" << std::endl;
     }
     
     //get fixed screen information
-    if (ioctl(frameBufferDevice, FBIOGET_FSCREENINFO, &fixedMode)) {
-        std::cout << ConsoleStyle(ConsoleStyle::YELLOW) << "Failed to read fixed mode information!" << ConsoleStyle() << std::endl;
+    if (ioctl(m_frameBufferDevice, FBIOGET_FSCREENINFO, &m_fixedMode)) {
+        std::cout << "Failed to read fixed mode information!" << std::endl;
     }
     
     //try to match an internal pixel format to the mode we got
-    pixelFormat = screenInfoToPixelFormat(currentMode);
+    m_format = screenInfoToPixelFormat(m_currentMode);
     //check if we can use it
-    if (pixelFormat == BAD_PIXELFORMAT) {
-		std::cout << ConsoleStyle(ConsoleStyle::RED) << "Unusable pixel format!" << ConsoleStyle() << std::endl;
+    if (m_format == BAD_PIXELFORMAT) {
+		std::cout << "Unusable pixel format!" << std::endl;
         destroy();
         return;
 	}
+	m_formatInfo = pixelFormatInfo[m_format];
 
-    //map framebuffer into user memory. round up to next bigger in [8/16/24/32]
-    bytesPerPixel = ((currentMode.bits_per_pixel + 7) / 8);
-    frameBufferSize = currentMode.yres * fixedMode.line_length;
-    frameBuffer = (unsigned char *)mmap(nullptr, frameBufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, frameBufferDevice, 0);
-    if (frameBuffer == MAP_FAILED) {
-		std::cout << ConsoleStyle(ConsoleStyle::RED) << "Failed to map framebuffer to user memory!" << ConsoleStyle() << std::endl;
+    //map framebuffer into user memory.
+    m_frameBufferSize = m_currentMode.yres * m_fixedMode.line_length;
+    m_frameBuffer = static_cast<uint8_t *>(mmap(nullptr, m_frameBufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, m_frameBufferDevice, 0));
+    if (m_frameBuffer == MAP_FAILED) {
+		std::cout << "Failed to map framebuffer to user memory!" << std::endl;
         destroy();
         return;
     }
     
     //dump some info
-	std::cout << ConsoleStyle(ConsoleStyle::GREEN) << "Opened a " << currentMode.xres << "x" << currentMode.yres << "@" << currentMode.bits_per_pixel << " display";
-    std::cout << " with virtual resolution " << currentMode.xres_virtual << "x" << currentMode.yres_virtual << "." << ConsoleStyle() << std::endl;
-    std::cout << ConsoleStyle(ConsoleStyle::GREEN) << "Pixel format is ";
-    switch (pixelFormat) {
-		case R8G8B8X8:
-			std::cout << "RGB32 with an R8G8B8X8 layout";
-			break;
-		case X8R8G8B8:
-			std::cout << "RGB32 with an X8R8G8B8 layout";
-			break;
-		case R8G8B8:
-			std::cout << "RGB24 with an R8G8B8 layout";
-			break;
-		case X1R5G5B5:
-			std::cout << "RGB16 with an X1R5G5B5 layout";
-			break;
-		case R5G6B5:
-			std::cout << "RGB16 with an R5G6B5 layout";
-			break;
-		default:
-			std::cout << "Unknown pixel format.";
-	};
-	std::cout << std::endl;
+	std::cout << "Opened a " << m_currentMode.xres << "x" << m_currentMode.yres << "@" << m_currentMode.bits_per_pixel << " display." << std::endl;
+    std::cout << "Pixel format is " << m_formatInfo.name << "." << std::endl;
 
     //draw blue debug rectangle
-    /*for (int y = 0; y < currentMode.yres; ++y) {
-        for (int x = 0; x < currentMode.xres; ++x) {
-            ((unsigned int *)frameBuffer)[y * currentMode.width + x] = 0xFF1199DD;
+    /*for (int y = 0; y < m_currentMode.yres; ++y) {
+        for (int x = 0; x < m_currentMode.xres; ++x) {
+            ((uint32_t *)m_frameBuffer)[y * m_currentMode.xres + x] = 0xFF1199DD;
         }
     }*/
 }
@@ -135,7 +128,7 @@ Framebuffer::PixelFormat Framebuffer::screenInfoToPixelFormat(const struct fb_va
 	}
 	else if (screenInfo.bits_per_pixel == 16) {
 		if (screenInfo.transp.length == 0) {
-			if (screenInfo.red.length == 6 | screenInfo.green.length == 6 | screenInfo.blue.length == 6) {
+			if (screenInfo.red.length == 6 || screenInfo.green.length == 6 || screenInfo.blue.length == 6) {
 				return R5G6B5;
 			}
 			else {
@@ -154,338 +147,385 @@ Framebuffer::PixelFormat Framebuffer::screenInfoToPixelFormat(const struct fb_va
 
 bool Framebuffer::isAvailable() const
 {
-	return (frameBuffer != nullptr && frameBufferDevice != 0);
+	return (m_frameBuffer != nullptr && m_frameBufferDevice != 0);
 }
 
 uint32_t Framebuffer::getWidth() const
 {
-    return currentMode.xres;
+    return m_currentMode.xres;
 }
 
 uint32_t Framebuffer::getHeight() const
 {
-    return currentMode.yres;
+    return m_currentMode.yres;
 }
 
-uint32_t Framebuffer::getBitsPerPixel() const
+Framebuffer::PixelFormat Framebuffer::getFormat() const
 {
-    return currentMode.bits_per_pixel;
+	return m_format;
 }
 
-uint32_t Framebuffer::getBytesPerPixel() const
+Framebuffer::PixelFormatInfo Framebuffer::getFormatInfo() const
 {
-    return currentMode.bytes_per_pixel;
+	return m_formatInfo;
 }
 
-PixelFormat Framebuffer::getPixelFormat() const
+void Framebuffer::blit(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, Framebuffer::PixelFormat sourceFormat)
 {
-	return pixelFormat;
+    //std::cout << "Blitting " << width << "x" << height << "@" << bpp << " image to [" << x "," << y << "]." << std::endl;
+    //check what framebuffer format we're blitting to
+    if (m_format == sourceFormat) {
+		blit_copy(x, y, data, width, height);
+    }
+    else if (m_format == R8G8B8X8) {
+		blit_R8G8B8X8(x, y, data, width, height, sourceFormat);
+    }
+    else if (m_format == X8R8G8B8) {
+		blit_X8R8G8B8(x, y, data, width, height, sourceFormat);
+    }
+    else if (m_format == R8G8B8) {
+		blit_R8G8B8(x, y, data, width, height, sourceFormat);
+    }
+	else if (m_format == X1R5G5B5) {
+		blit_X1R5G5B5(x, y, data, width, height, sourceFormat);
+    }
+	else if (m_format == R5G6B5) {
+		blit_R5G6B5(x, y, data, width, height, sourceFormat);
+    }
 }
 
-void Framebuffer::drawBuffer(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat)
+void Framebuffer::blit_copy(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height)
 {
-    //std::cout << "Frame " << width << "x" << height << "@" << bpp << std::endl;
-    const uint32_t srcLineLength = width * ((bpp + 7) / 8);
-    //std::cout << "Bpp " << currentMode.bits_per_pixel << ", Bytespp " << bytesPerPixel << ", Bytespsl " << bytesPerScanline << std::endl;
-    uint8_t * dest = frameBuffer + (y + currentMode.yoffset) * fixedMode.line_length + (x + currentMode.xoffset) * bytesPerPixel;
-    if (pixelFormat == sourceFormat) {
-        for (int line = 0; line < height; ++line) {
-            memcpy(dest, data, srcLineLength);
-            dest += fixedMode.line_length;
-            data += srcLineLength;
-        }
-    }
-    else if (pixelFormat == R8G8B8X8) {
-        if (sourceFormat == I8) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
-                    *destLine = *srcLine << 24 | *srcLine << 16 | *srcLine << 8 | 0xff;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-		else if (sourceFormat == X1R5G5B5) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
-                    *destLine = (*srcLine & 0x7c00) << 14 | (*srcLine & 0x3e0) << 11 | (*srcLine & 0x1f) << 8 | 0xff;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-		else if (sourceFormat == R5G6B5) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
-                    *destLine = (*srcLine & 0xf800) << 14 | (*srcLine & 0x7e0) << 11 | (*srcLine & 0x1f) << 8 | 0xff;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (sourceFormat == R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 3) {
-                    *destLine = srcLine[2] << 24 | srcLine[1] << 16 | srcLine[0] << 8 | 0xff;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-    }
-    else if (pixelFormat == X8R8G8B8) {
-        if (sourceFormat == I8) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
-                    *destLine = 0xff000000 | *srcLine << 16 | *srcLine << 8 | *srcLine;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-		else if (sourceFormat == X1R5G5B5) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
-                    *destLine = 0xff000000 | (*srcLine & 0x7c00) << 6 | (*srcLine & 0x3e0) << 3 | (*srcLine & 0x1f);
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-		else if (sourceFormat == R5G6B5) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
-                    *destLine = 0xff000000 | (*srcLine & 0xf800) << 5 | (*srcLine & 0x7e0) << 3 | (*srcLine & 0x1f);
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (sourceFormat == R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint32_t * destLine = (uint32_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 3) {
-                    *destLine = 0xff000000 | srcLine[2] << 16 | srcLine[1] << 8 | srcLine[0];
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-    }
-    else if (pixelFormat == R8G8B8) {
-        if (sourceFormat == I8) {
-            for (int line = 0; line < height; ++line) {
-                uint8_t * destLine = dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine+=3, srcLine++) {
-                    destLine[0] = *srcLine;
-                    destLine[1] = *srcLine;
-                    destLine[2] = *srcLine;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        if (sourceFormat == X1R5G5B5) {
-            for (int line = 0; line < height; ++line) {
-                uint8_t * destLine = dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
-                    destLine[0] = (*srcLine & 0x7c00) >> 10;
-                    destLine[1] = (*srcLine & 0x03e0) >> 5;
-                    destLine[2] = (*srcLine & 0x001f);
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        if (sourceFormat == R5G6B5) {
-            for (int line = 0; line < height; ++line) {
-                uint8_t * destLine = dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
-                    destLine[0] = (*srcLine & 0xf800) >> 11;
-                    destLine[1] = (*srcLine & 0x07e0) >> 5;
-                    destLine[2] = (*srcLine & 0x001f);
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (R8G8B8X0) {
-            for (int line = 0; line < height; ++line) {
-                uint8_t * destLine = dest;
-                const uint32_t * srcLine = (uint32_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine+=3, srcLine++) {
-                    destLine[0] = srcLine[3];
-                    destLine[1] = srcLine[2];
-                    destLine[2] = srcLine[1];
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (X0R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint8_t * destLine = dest;
-                const uint32_t * srcLine = (uint32_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine+=3, srcLine++) {
-                    destLine[0] = srcLine[2];
-                    destLine[1] = srcLine[1];
-                    destLine[2] = srcLine[0];
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-    }
-	else if (pixelFormat == X1R5G5B5) {
-        if (sourceFormat == I8) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
-                    *destLine = 0x8000 | (*srcLine & 0xf8) << 7 | (*srcLine & 0xf8) << 2 | (*srcLine & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        if (sourceFormat == R5G6B5) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
-                    *destLine = 0x8000 | (*srcLine & 0xffc0) >> 1 | (*srcLine & 0x001f);
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=3) {
-					*destLine = 0x8000 | (srcLine[2] & 0xf8) << 7 | (srcLine[1] & 0xf8) << 2 | (srcLine[0] & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (R8G8B8X0) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
-                    *destLine = 0x8000 | (srcLine[3] & 0xf8) << 7 | (srcLine[2] & 0xf8) << 2 | (srcLine[1] & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (X0R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
-                    *destLine = 0x8000 | (srcLine[2] & 0xf8) << 7 | (srcLine[1] & 0xf8) << 2 | (srcLine[0] & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-    }
-	else if (pixelFormat == R5G6B5) {
-        if (sourceFormat == I8) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
-                    *destLine = (*srcLine & 0xf8) << 8 | (*srcLine & 0xfc) << 3 | (*srcLine & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        if (sourceFormat == X1R5G5B5) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint16_t * srcLine = (const uint16_t *)data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
-                    *destLine = (*srcLine & 0x7ff0) << 1 | (*srcLine & 0x001f);
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=3) {
-                    *destLine = (srcLine[2] & 0xf8) << 8 | (srcLine[1] & 0xfc) << 3 | (srcLine[0] & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (R8G8B8X0) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
-                    *destLine = (srcLine[3] & 0xf8) << 8 | (srcLine[2] & 0xfc) << 3 | (srcLine[1] & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-        else if (X0R8G8B8) {
-            for (int line = 0; line < height; ++line) {
-                uint16_t * destLine = (uint16_t *)dest;
-                const uint8_t * srcLine = data;
-                for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
-                    *destLine = (srcLine[2] & 0xf8) << 8 | (srcLine[1] & 0xfc) << 3 | (srcLine[0] & 0xf8) >> 3;
-                }
-                dest += fixedMode.line_length;
-                data += srcLineLength;
-            }
-        }
-    }
+	//blitting to the same format. simple memcopy    
+	const uint32_t srcLineLength = width * m_formatInfo.bytesPerPixel;
+	uint8_t * dest = m_frameBuffer + (y + m_currentMode.yoffset) * m_fixedMode.line_length + (x + m_currentMode.xoffset) * m_formatInfo.bytesPerPixel;
+	const uint32_t destLineLength = m_fixedMode.line_length;
+	for (uint32_t line = 0; line < height; ++line) {
+		memcpy(dest, data, srcLineLength);
+		dest += destLineLength;
+		data += srcLineLength;
+	}
+}
+
+void Framebuffer::blit_R8G8B8X8(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, Framebuffer::PixelFormat sourceFormat)
+{
+    const uint32_t srcLineLength = width * pixelFormatInfo[sourceFormat].bytesPerPixel;
+    uint32_t * dest = reinterpret_cast<uint32_t *>(m_frameBuffer + (y + m_currentMode.yoffset) * m_fixedMode.line_length + (x + m_currentMode.xoffset) * m_formatInfo.bytesPerPixel);
+    const uint32_t destLineLength = m_fixedMode.line_length;
+    //check source format
+	if (sourceFormat == GREY8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
+				*destLine = *srcLine << 24 | *srcLine << 16 | *srcLine << 8 | 0xff;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == X1R5G5B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
+				*destLine = (*srcLine & 0x7c00) << 14 | (*srcLine & 0x3e0) << 11 | (*srcLine & 0x1f) << 8 | 0xff;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R5G6B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
+				*destLine = (*srcLine & 0xf800) << 14 | (*srcLine & 0x7e0) << 11 | (*srcLine & 0x1f) << 8 | 0xff;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 3) {
+				*destLine = srcLine[2] << 24 | srcLine[1] << 16 | srcLine[0] << 8 | 0xff;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+}
+
+void Framebuffer::blit_X8R8G8B8(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, Framebuffer::PixelFormat sourceFormat)
+{
+    const uint32_t srcLineLength = width * pixelFormatInfo[sourceFormat].bytesPerPixel;
+    uint32_t * dest = reinterpret_cast<uint32_t *>(m_frameBuffer + (y + m_currentMode.yoffset) * m_fixedMode.line_length + (x + m_currentMode.xoffset) * m_formatInfo.bytesPerPixel);
+    const uint32_t destLineLength = m_fixedMode.line_length;
+    //check source format
+	if (sourceFormat == GREY8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
+				*destLine = 0xff000000 | *srcLine << 16 | *srcLine << 8 | *srcLine;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == X1R5G5B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
+				*destLine = 0xff000000 | (*srcLine & 0x7c00) << 6 | (*srcLine & 0x3e0) << 3 | (*srcLine & 0x1f);
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R5G6B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
+				*destLine = 0xff000000 | (*srcLine & 0xf800) << 5 | (*srcLine & 0x7e0) << 3 | (*srcLine & 0x1f);
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint32_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 3) {
+				*destLine = 0xff000000 | srcLine[2] << 16 | srcLine[1] << 8 | srcLine[0];
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+}
+
+void Framebuffer::blit_R8G8B8(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, Framebuffer::PixelFormat sourceFormat)
+{
+    const uint32_t srcLineLength = width * pixelFormatInfo[sourceFormat].bytesPerPixel;
+    uint8_t * dest = m_frameBuffer + (y + m_currentMode.yoffset) * m_fixedMode.line_length + (x + m_currentMode.xoffset) * m_formatInfo.bytesPerPixel;
+    const uint32_t destLineLength = m_fixedMode.line_length;
+    //check source format
+	if (sourceFormat == GREY8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint8_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine+=3, srcLine++) {
+				destLine[0] = *srcLine;
+				destLine[1] = *srcLine;
+				destLine[2] = *srcLine;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	if (sourceFormat == X1R5G5B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint8_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
+				destLine[0] = (*srcLine & 0x7c00) >> 10;
+				destLine[1] = (*srcLine & 0x03e0) >> 5;
+				destLine[2] = (*srcLine & 0x001f);
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	if (sourceFormat == R5G6B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint8_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine += 2) {
+				destLine[0] = (*srcLine & 0xf800) >> 11;
+				destLine[1] = (*srcLine & 0x07e0) >> 5;
+				destLine[2] = (*srcLine & 0x001f);
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8X8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint8_t * destLine = dest;
+			const uint32_t * srcLine = (uint32_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine+=3, srcLine++) {
+				destLine[0] = srcLine[3];
+				destLine[1] = srcLine[2];
+				destLine[2] = srcLine[1];
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == X8R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint8_t * destLine = dest;
+			const uint32_t * srcLine = (uint32_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine+=3, srcLine++) {
+				destLine[0] = srcLine[2];
+				destLine[1] = srcLine[1];
+				destLine[2] = srcLine[0];
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+}
+
+void Framebuffer::blit_X1R5G5B5(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, Framebuffer::PixelFormat sourceFormat)
+{
+    const uint32_t srcLineLength = width * pixelFormatInfo[sourceFormat].bytesPerPixel;
+    uint16_t * dest = reinterpret_cast<uint16_t *>(m_frameBuffer + (y + m_currentMode.yoffset) * m_fixedMode.line_length + (x + m_currentMode.xoffset) * m_formatInfo.bytesPerPixel);
+    const uint32_t destLineLength = m_fixedMode.line_length;
+    //check source format
+	if (sourceFormat == GREY8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
+				*destLine = 0x8000 | (*srcLine & 0xf8) << 7 | (*srcLine & 0xf8) << 2 | (*srcLine & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	if (sourceFormat == R5G6B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
+				*destLine = 0x8000 | (*srcLine & 0xffc0) >> 1 | (*srcLine & 0x001f);
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=3) {
+				*destLine = 0x8000 | (srcLine[2] & 0xf8) << 7 | (srcLine[1] & 0xf8) << 2 | (srcLine[0] & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8X8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
+				*destLine = 0x8000 | (srcLine[3] & 0xf8) << 7 | (srcLine[2] & 0xf8) << 2 | (srcLine[1] & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == X8R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
+				*destLine = 0x8000 | (srcLine[2] & 0xf8) << 7 | (srcLine[1] & 0xf8) << 2 | (srcLine[0] & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+}
+
+void Framebuffer::blit_R5G6B5(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, Framebuffer::PixelFormat sourceFormat)
+{
+    const uint32_t srcLineLength = width * pixelFormatInfo[sourceFormat].bytesPerPixel;
+    uint16_t * dest = reinterpret_cast<uint16_t *>(m_frameBuffer + (y + m_currentMode.yoffset) * m_fixedMode.line_length + (x + m_currentMode.xoffset) * m_formatInfo.bytesPerPixel);
+    const uint32_t destLineLength = m_fixedMode.line_length;
+    //check source format
+	if (sourceFormat == GREY8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
+				*destLine = (*srcLine & 0xf8) << 8 | (*srcLine & 0xfc) << 3 | (*srcLine & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	if (sourceFormat == X1R5G5B5) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint16_t * srcLine = (const uint16_t *)data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine++) {
+				*destLine = (*srcLine & 0x7ff0) << 1 | (*srcLine & 0x001f);
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=3) {
+				*destLine = (srcLine[2] & 0xf8) << 8 | (srcLine[1] & 0xfc) << 3 | (srcLine[0] & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == R8G8B8X8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
+				*destLine = (srcLine[3] & 0xf8) << 8 | (srcLine[2] & 0xfc) << 3 | (srcLine[1] & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
+	else if (sourceFormat == X8R8G8B8) {
+		for (uint32_t line = 0; line < height; ++line) {
+			uint16_t * destLine = dest;
+			const uint8_t * srcLine = data;
+			for (int pixel = 0; pixel < width; ++pixel, destLine++, srcLine+=4) {
+				*destLine = (srcLine[2] & 0xf8) << 8 | (srcLine[1] & 0xfc) << 3 | (srcLine[0] & 0xf8) >> 3;
+			}
+			dest += destLineLength;
+			data += srcLineLength;
+		}
+	}
 }
 
 void Framebuffer::destroy()
 {
 	std::cout << "Closing framebuffer..." << std::endl;
     
-    if (frameBuffer != nullptr && frameBuffer != MAP_FAILED) {
-        munmap(frameBuffer, frameBufferSize);
+    if (m_frameBuffer != nullptr && m_frameBuffer != MAP_FAILED) {
+        munmap(m_frameBuffer, m_frameBufferSize);
     }
-    frameBuffer = nullptr;
-    frameBufferSize = 0;
+    m_frameBuffer = nullptr;
+    m_frameBufferSize = 0;
 
-    if (frameBufferDevice != 0) {
+    if (m_frameBufferDevice != 0) {
         //reset old screen mode
-        ioctl(frameBufferDevice, FBIOPUT_VSCREENINFO, &oldMode);
-        frameBufferDevice = 0;
+        ioctl(m_frameBufferDevice, FBIOPUT_VSCREENINFO, &m_oldMode);
+        m_frameBufferDevice = 0;
         //close device
-        close(frameBufferDevice);
+        close(m_frameBufferDevice);
     }
 }
 

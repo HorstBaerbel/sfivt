@@ -3,6 +3,13 @@ cmake_minimum_required(VERSION 2.6)
 project(svift)
 
 #-------------------------------------------------------------------------------
+#add local find scripts to CMAKE path
+LIST(APPEND CMAKE_MODULE_PATH
+    ${CMAKE_CURRENT_SOURCE_DIR}/CMake/Utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/CMake/Packages
+)
+
+#-------------------------------------------------------------------------------
 #set up compiler flags and excutable names
 
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -31,10 +38,12 @@ set(TARGET_INCLUDE_DIRS
 
 set(TARGET_HEADERS
 	${CMAKE_CURRENT_SOURCE_DIR}/framebuffer.h
+	${CMAKE_CURRENT_SOURCE_DIR}/imageIO.h
 )
 
 set(TARGET_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/framebuffer.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/imageIO.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
 )
 
@@ -54,5 +63,5 @@ set(LIBRARY_OUTPUT_PATH ${dir} CACHE PATH "Build directory" FORCE)
 #-------------------------------------------------------------------------------
 #define target
 include_directories(${TARGET_INCLUDE_DIRS})
-add_executable(emulationstation ${TARGET_SOURCES} ${TARGET_HEADERS})
-target_link_libraries(emulationstation ${TARGET_LIBRARIES})
+add_executable(sfivt ${TARGET_SOURCES} ${TARGET_HEADERS})
+target_link_libraries(sfivt ${TARGET_LIBRARIES})

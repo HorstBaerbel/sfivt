@@ -1,8 +1,10 @@
 #include <unistd.h>
-#include <string.h>
+#include <string>
+#include <iostream>
 #include <memory>
 
 #include "framebuffer.h"
+#include "imageIO.h"
 
 
 std::string imageFile = "";
@@ -10,17 +12,17 @@ std::string frameBufferDevice = "";
 std::shared_ptr<Framebuffer> frameBuffer;
 
 bool oneshot = false;
-bool autozoom = false;
+//bool autozoom = false;
 
 
 void printUsage()
 {
     std::cout << "Usage:" << std::endl;
-    std::cout << "sfivt " << ConsoleStyle(ConsoleStyle::CYAN) << "[OPTIONS] <FRAMEBUFFER> <IMAGEFILE>" << ConsoleStyle() << "." << std::endl;
+    std::cout << "sfivt " << "[OPTIONS] <FRAMEBUFFER> <IMAGEFILE>" << "." << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << ConsoleStyle(ConsoleStyle::CYAN) << "-1" << ConsoleStyle() << " - One-shot. Display image and quit." << std::endl;
-    std::cout << ConsoleStyle(ConsoleStyle::CYAN) << "-a" << ConsoleStyle() << " - Auto-zoom. Fit image to framebuffer." << std::endl;
-    std::cout << "e.g. \"sfivt -a /dev/fb1 ~/foo/bar.png\"." << std::endl;
+    std::cout << "-1" << " - One-shot. Display image and quit." << std::endl;
+    //std::cout << "-a" << " - Auto-zoom. Fit image to framebuffer." << std::endl;
+    std::cout << "e.g. \"sfivt -1 /dev/fb1 ~/foo/bar.png\"." << std::endl;
     std::cout << "svift can read all formats that FreeImage can, so more or less: JPG/PNG/TIFF/BMP/TGA/GIF." << std::endl;
 }
 
@@ -39,9 +41,9 @@ bool parseCommandLine(int argc, char * argv[])
         else if (argument == "-1") {
             oneshot = true;
         }
-        else if (argument == "-a") {
+        /*else if (argument == "-a") {
 			autozoom = true;
-        }
+        }*/
         else {
             //must be something else
             if (frameBufferDevice.empty()) {
@@ -51,7 +53,7 @@ bool parseCommandLine(int argc, char * argv[])
                 imageFile = argument;
             }
             else {
-                std::cout << ConsoleStyle(ConsoleStyle::RED) << "Too many options!" << ConsoleStyle() << std::endl;
+                std::cout << "Too many options!" << std::endl;
                 printUsage();
                 return false;
             }
@@ -62,17 +64,50 @@ bool parseCommandLine(int argc, char * argv[])
 
 int main(int argc, char * argv[])
 {
-    std::cout << ConsoleStyle(ConsoleStyle::CYAN) << "sfivt - A Simple Frambuffer Image viewing Tool." << ConsoleStyle() << std::endl;
+    std::cout << "sfivt - A Simple Frambuffer Image viewing Tool." << std::endl;
+    
+    if (argc < 3 || argc > 5) {
+		printUsage();
+		return -1;
+	}
     
     if (!parseCommandLine(argc, argv)) {
         return -1;
     }
     
     //create framebuffer
-    frameBuffer = std::make_shared<Framebuffer>();
+    frameBuffer = std::make_shared<Framebuffer>(frameBufferDevice);
 	if (!frameBuffer->isAvailable()) {
-		std::cout << ConsoleStyle(ConsoleStyle::RED) << "Failed to initialize framebuffer!" << ConsoleStyle() << std::endl;
+		std::cout << "Failed to initialize framebuffer!" << std::endl;
 		return -2;
+	}
+	
+	//try loading the image
+	uint32_t width = frameBuffer->getWidth();
+	uint32_t height = frameBuffer->getHeight();
+	std::vector<uint8_t> data = ImageIO::loadFile_RGBA32(imageFile, width, height);
+	if (data.empty()) {
+		std::cout << "Failed to load image!" << std::endl;
+		return -3;
+	}
+	
+	//wait for input?
+	if (!oneshot) {
+		//hide cursor
+		std::cout << "\e[?1;0;127c";
+	}
+	
+	//display the image centered on screen
+	uint32_t x = width < frameBuffer->getWidth() ? (frameBuffer->getWidth() - width) / 2 : 0;
+	uint32_t y = height < frameBuffer->getHeight() ? (frameBuffer->getHeight() - height) / 2 : 0;
+	frameBuffer->blit(x, y, data.data(), width, height, Framebuffer::X8R8G8B8);
+
+	//wait for input?
+	if (!oneshot) {
+		//wait for user return
+		std::cin.get();
+		//unhide cursor
+		std::cout << "\e[?0;0;0c";
 	}
 
 	return 0;
