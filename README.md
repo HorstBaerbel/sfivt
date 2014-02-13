@@ -2,7 +2,7 @@ sfivt
 =====
 
 Simple Framebuffer Image Viewing Tool for Linux. Displays an image (surprise) on the linux **console framebuffer**.
-So you need to use <CTRL>+<ALT>+<F1-6> to switch to a real console, not that window-thingy you're usually using..
+So you need to use &lt;CTRL&gt;+&lt;ALT&gt;+&lt;F1-6&gt; to switch to a real console, not that window-thingy you're usually using..
 
 License
 ========
@@ -34,7 +34,7 @@ The FRAMEBUFFER_DEVICE should be something like /dev/fb0. If you can not access 
 IMAGE_FILE should be the full path to an image file on disk. The sfivt can display all the formats the FreeImage library is able to read, so PNG/JPG/TIFF/BMP/GIF/TGA should be working.  
 
 **Valid command(s):**  
-- -1 One-shot mode. Exit directly after displaying the image. Do not wait for <ENTER>. Obscure, I know.  
+- -1 One-shot mode. Exit directly after displaying the image. Do not wait for &lt;ENTER&gt;. Obscure, I know.  
 
 **Examples:**  
 Display an image on fb2 and directly exit: ```sfivt -1 /dev/fb1 ~/xxx/aaa.jpg```  
