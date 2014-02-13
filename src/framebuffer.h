@@ -51,6 +51,27 @@ public:
 	\return Returns a matching PixelFormat or BAD_PIXELFORMAT.
 	*/
 	static PixelFormat screenInfoToPixelFormat(const struct fb_var_screeninfo & screenInfo);
+
+	/*!
+	Convert colors from one pixel format to another.
+	\param[in] destFormat Output color pixel format.
+	\param[in] source Input color source pointer.
+	\param[in] sourceFormat Input color pixel format.
+	\param[in] count Number of consecutive pixels to convert.
+	\return Returns a new buffer with the converted data. YOU have to delete [] it when you're done with it.
+	\note This is slow. Usage scenario is to convert a single color for clear() or convert a whole image once before blit()ting it multiple times.
+	*/
+	static uint8_t * convertToPixelFormat(PixelFormat destFormat, const uint8_t * source, PixelFormat sourceFormat, size_t count = 1);
+	
+	/*!
+	Convert colors from one pixel format to framebuffer format.
+	\param[in] source Input color source pointer.
+	\param[in] sourceFormat Input color pixel format.
+	\param[in] count Number of consecutive pixels to convert.
+	\return Returns a new buffer with the converted data. YOU have to delete [] it when you're done with it.
+	\note This is slow. Usage scenario is to convert a single color for clear() or convert a whole image once before blit()ting it multiple times.
+	*/
+	uint8_t * convertToFramebufferFormat(const uint8_t * source, PixelFormat sourceFormat, size_t count = 1);
 	
 	/*!
 	Check if framebuffer interface is available.
@@ -64,6 +85,12 @@ public:
 	PixelFormatInfo getFormatInfo() const;
 
 	/*!
+	Fill rect in framebuffer at position.
+	\param[in] color Pointer to raw color data. MUST BE IN FRAMEBUFFER PIXEL FORMAT!
+	*/
+	void clear(const uint8_t * color);
+
+	/*!
 	Draw raw image to framebuffer at position.
 	\param[in] x Horizontal position where to draw image in framebuffer.
 	\param[in] y Vertical position where to draw image in framebuffer.
@@ -73,7 +100,7 @@ public:
 	\param[in] sourceFormat Source \sa data pixel format.
 	\note Should work for 32/24/16/15 bit pixel formats.
 	*/
-	void blit(uint32_t x, uint32_t y, const unsigned char * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
+	void blit(uint32_t x, uint32_t y, const uint8_t * data, uint32_t width, uint32_t height, PixelFormat sourceFormat);
 	
 	~Framebuffer();
 	

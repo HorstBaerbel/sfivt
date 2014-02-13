@@ -97,6 +97,12 @@ int main(int argc, char * argv[])
 		std::cout << "\e[?1;0;127c";
 	}
 	
+	//clear framebuffer to black
+	uint32_t inColor = 0;
+	uint8_t * clearColor = frameBuffer->convertToFramebufferFormat((const uint8_t *)&inColor, Framebuffer::X8R8G8B8);
+	frameBuffer->clear(clearColor);
+	delete [] clearColor;
+	
 	//display the image centered on screen
 	uint32_t x = width < frameBuffer->getWidth() ? (frameBuffer->getWidth() - width) / 2 : 0;
 	uint32_t y = height < frameBuffer->getHeight() ? (frameBuffer->getHeight() - height) / 2 : 0;
