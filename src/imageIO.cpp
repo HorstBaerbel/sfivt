@@ -67,6 +67,8 @@ std::vector<uint8_t> ImageIO::loadFile_RGBA32(const std::string & fileName, uint
 						fiBitmap = fiScaled;
 					}
 				}
+				//flip image now about y-axis
+				FreeImage_FlipVertical(fiBitmap);
 				//const unsigned int pitch = FreeImage_GetPitch(fiBitmap);
 				//loop through scanlines and add all pixel data to the return vector
 				//this is necessary, because width*height*bpp might not be == pitch
