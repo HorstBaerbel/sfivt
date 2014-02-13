@@ -64,7 +64,7 @@ bool parseCommandLine(int argc, char * argv[])
 
 int main(int argc, char * argv[])
 {
-	std::cout << "sfivt - A Simple Frambuffer Image viewing Tool." << std::endl;
+	std::cout << "sfivt - A Simple Frambuffer Image viewing Tool v0.8 alpha" << std::endl;
 	
 	if (argc < 3 || argc > 5) {
 		printUsage();
@@ -114,6 +114,10 @@ int main(int argc, char * argv[])
 		std::cin.get();
 		//unhide cursor
 		std::cout << "\e[?0;0;0c";
+	}
+	else {
+		//wait for longer than the display refresh, else the image might not reach the device?!... wtf.
+		usleep(100*1000);
 	}
 
 	return 0;
