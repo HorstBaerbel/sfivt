@@ -12,6 +12,7 @@ std::string frameBufferDevice = "";
 std::shared_ptr<Framebuffer> frameBuffer;
 
 bool oneshot = false;
+bool displayTwice = false;
 //bool autozoom = false;
 
 
@@ -20,7 +21,8 @@ void printUsage()
 	std::cout << "Usage:" << std::endl;
 	std::cout << "sfivt " << "[OPTIONS] <FRAMEBUFFER> <IMAGEFILE>" << "." << std::endl;
 	std::cout << "Options:" << std::endl;
-	std::cout << "-1" << " - One-shot. Display image and quit." << std::endl;
+	std::cout << "-1" << " - One-shot. Display image and quit without waiting for <ENTER>." << std::endl;
+	std::cout << "-2" << " - Display image twice. Useful if your USB screen is buggy." << std::endl;
 	//std::cout << "-a" << " - Auto-zoom. Fit image to framebuffer." << std::endl;
 	std::cout << "e.g. \"sfivt -1 /dev/fb1 ~/foo/bar.png\"." << std::endl;
 	std::cout << "svift can read all formats that FreeImage can, so more or less: JPG/PNG/TIFF/BMP/TGA/GIF." << std::endl;
@@ -40,6 +42,9 @@ bool parseCommandLine(int argc, char * argv[])
 		}
 		else if (argument == "-1") {
 			oneshot = true;
+		}
+		else if (argument == "-2") {
+			displayTwice = true;
 		}
 		/*else if (argument == "-a") {
 			autozoom = true;
@@ -107,6 +112,10 @@ int main(int argc, char * argv[])
 	uint32_t x = width < frameBuffer->getWidth() ? (frameBuffer->getWidth() - width) / 2 : 0;
 	uint32_t y = height < frameBuffer->getHeight() ? (frameBuffer->getHeight() - height) / 2 : 0;
 	frameBuffer->blit(x, y, data.data(), width, height, Framebuffer::X8R8G8B8);
+
+	if (displayTwice) {
+		frameBuffer->blit(x, y, data.data(), width, height, Framebuffer::X8R8G8B8);
+	}
 
 	//wait for input?
 	if (!oneshot) {
