@@ -156,7 +156,7 @@ uint8_t * Framebuffer::convertToPixelFormat(PixelFormat destFormat, const uint8_
 		return dest;
 	}
 	//create temporary 32bit R8G8B8X8 conversion buffer
-	const size_t tempSize = count * pixelFormatInfo[sourceFormat].bytesPerPixel;
+	const size_t tempSize = count * pixelFormatInfo[R8G8B8X8].bytesPerPixel;
 	uint32_t * temp = reinterpret_cast<uint32_t *>(new uint8_t[tempSize]);
 	//check source format and convert to 32bit temporary buffer
 	if (sourceFormat == GREY8) {
